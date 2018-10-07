@@ -42,7 +42,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_AS726x.git"
 
 _AS726X_ADDRESS = const(0x49)
 
-_AS726X_HW_VERSION = const(0x00)
+_AS726X_HW_VERSION = const(0x01)
 _AS726X_FW_VERSION = const(0x02)
 _AS726X_CONTROL_SETUP = const(0x04)
 _AS726X_INT_T = const(0x05)
@@ -69,6 +69,7 @@ _AS7262_G_CAL = const(0x1C)
 _AS7262_Y_CAL = const(0x20)
 _AS7262_O_CAL = const(0x24)
 _AS7262_R_CAL = const(0x28)
+
 
 #hardware registers
 _AS726X_SLAVE_STATUS_REG = const(0x00)
@@ -141,13 +142,16 @@ class Adafruit_AS726x(object):
         #try to read the version reg to make sure we can connect
         version = self._virtual_read(_AS726X_HW_VERSION)
 
-        #TODO: add support for other devices
-        if version != 0x40:
-            raise ValueError("device could not be reached or this device is not supported!")
+        self._hw_read = version
 
-        self.integration_time = 140
+        self.integration_time = 280
         self.conversion_mode = Adafruit_AS726x.MODE_2
         self.gain = 64
+
+    @property
+    def hwversion(self):
+        """return hardware fw read"""
+        return self._hw_read
 
     @property
     def driver_led(self):
@@ -369,6 +373,67 @@ class Adafruit_AS726x(object):
     def raw_red(self):
         """Raw red (650nm) 16-bit value"""
         return self.read_channel(_AS7262_RED)
+
+    @property
+    def raw_nir_r(self):
+        """NIR Raw R"""
+        return self.read_channel(_AS7262_V_HIGH)
+
+    @property
+    def raw_nir_s(self):
+        """NIR Raw S"""
+        return self.read_channel(_AS7262_B_HIGH)
+    
+    @property
+    def raw_nir_t(self):
+        """NIR Raw T"""
+        return self.read_channel(_AS7262_G_HIGH)
+    
+    @property
+    def raw_nir_u(self):
+        """NIR Raw U"""
+        return self.read_channel(_AS7262_Y_HIGH)
+    
+    @property
+    def raw_nir_v(self):
+        """NIR Raw V"""
+        return self.read_channel(_AS7262_O_HIGH)
+
+    @property
+    def raw_nir_w(self):
+        """NIR Raw W"""
+        return self.read_channel(_AS7262_R_HIGH)
+    
+    @property
+    def nir_r(self):
+        """NIR Calibrated R"""
+        return self.read_channel(_AS7262_V_CAL)
+    
+    @property
+    def nir_s(self):
+        """NIR Calibrated S"""
+        return self.read_channel(_AS7262_B_CAL)
+    
+    @property
+    def nir_t(self):
+        """NIR Calibrated T"""
+        return self.read_channel(_AS7262_G_CAL)
+
+    @property
+    def nir_u(self):
+        """NIR Calibrated U"""
+        return self.read_channel(_AS7262_Y_CAL)
+    
+    @property
+    def nir_v(self):
+        """NIR Calibrated V"""
+        return self.read_channel(_AS7262_O_CAL)
+
+    @property
+    def nir_w(self):
+        """NIR Calibrated W"""
+        return self.read_channel(_AS7262_R_CAL)
+
 
     def _read_u8(self, command):
         """read a single byte from a specified register"""
