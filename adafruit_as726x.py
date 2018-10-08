@@ -42,7 +42,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_AS726x.git"
 
 _AS726X_ADDRESS = const(0x49)
 
-_AS726X_HW_VERSION = const(0x01)
+_AS726X_HW_VERSION = const(0x00)
 _AS726X_FW_VERSION = const(0x02)
 _AS726X_CONTROL_SETUP = const(0x04)
 _AS726X_INT_T = const(0x05)
@@ -70,7 +70,6 @@ _AS7262_Y_CAL = const(0x20)
 _AS7262_O_CAL = const(0x24)
 _AS7262_R_CAL = const(0x28)
 
-
 #hardware registers
 _AS726X_SLAVE_STATUS_REG = const(0x00)
 _AS726X_SLAVE_WRITE_REG = const(0x01)
@@ -78,6 +77,7 @@ _AS726X_SLAVE_READ_REG = const(0x02)
 _AS726X_SLAVE_TX_VALID = const(0x02)
 _AS726X_SLAVE_RX_VALID = const(0x01)
 
+#AS7262 Hardware Registers
 _AS7262_VIOLET = const(0x08)
 _AS7262_BLUE = const(0x0A)
 _AS7262_GREEN = const(0x0C)
@@ -90,6 +90,20 @@ _AS7262_GREEN_CALIBRATED = const(0x1C)
 _AS7262_YELLOW_CALIBRATED = const(0x20)
 _AS7262_ORANGE_CALIBRATED = const(0x24)
 _AS7262_RED_CALIBRATED = const(0x28)
+
+#AS7263 Hardware Registers
+_AS7263_R = const(0x08)
+_AS7263_S = const(0x0A)
+_AS7263_T = const(0x0C)
+_AS7263_U = const(0x0E)
+_AS7263_V = const(0x10)
+_AS7263_W = const(0x12)
+_AS7263_R_CAL = const(0x14)
+_AS7263_S_CAL = const(0x18)
+_AS7263_T_CAL = const(0x1C)
+_AS7263_U_CAL = const(0x20)
+_AS7263_V_CAL = const(0x24)
+_AS7263_W_CAL = const(0x28)
 
 _AS726X_NUM_CHANNELS = const(6)
 
@@ -142,14 +156,17 @@ class Adafruit_AS726x(object):
         #try to read the version reg to make sure we can connect
         version = self._virtual_read(_AS726X_HW_VERSION)
 
-        self._hw_read = version
+        #TODO: add support for other devices
+        if version != 0x40 and version != 0x3F:
+            raise ValueError("device could not be reached or this device is not supported!")
 
-        self.integration_time = 280
+        self._hw_read = version
+        self.integration_time = 140
         self.conversion_mode = Adafruit_AS726x.MODE_2
         self.gain = 64
 
     @property
-    def hwversion(self):
+    def hw_version(self):
         """return hardware fw read"""
         return self._hw_read
 
@@ -314,6 +331,66 @@ class Adafruit_AS726x(object):
         """The temperature of the device in Celsius"""
         return self._virtual_read(_AS726X_DEVICE_TEMP)
 
+    def _read_u8(self, command):
+        """read a single byte from a specified register"""
+        buf = self.buf2
+        buf[0] = command
+        with self.i2c_device as i2c:
+            i2c.write(buf, end=1)
+            i2c.readinto(buf, end=1)
+        return buf[0]
+
+    def __write_u8(self, command, abyte):
+        """Write a command and 1 byte of data to the I2C device"""
+        buf = self.buf2
+        buf[0] = command
+        buf[1] = abyte
+        with self.i2c_device as i2c:
+            i2c.write(buf)
+
+    def _virtual_read(self, addr):
+        """read a virtual register"""
+        while True:
+            # Read slave I2C status to see if the read buffer is ready.
+            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
+            if (status & _AS726X_SLAVE_TX_VALID) == 0:
+                # No inbound TX pending at slave. Okay to write now.
+                break
+        # Send the virtual register address (setting bit 7 to indicate a pending write).
+        self.__write_u8(_AS726X_SLAVE_WRITE_REG, addr)
+        while True:
+            # Read the slave I2C status to see if our read data is available.
+            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
+            if (status & _AS726X_SLAVE_RX_VALID) != 0:
+                # Read data is ready.
+                break
+        # Read the data to complete the operation.
+        data = self._read_u8(_AS726X_SLAVE_READ_REG)
+        return data
+
+    def _virtual_write(self, addr, value):
+        """write a virtual register"""
+        while True:
+            # Read slave I2C status to see if the write buffer is ready.
+            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
+            if (status & _AS726X_SLAVE_TX_VALID) == 0:
+                break # No inbound TX pending at slave. Okay to write now.
+        # Send the virtual register address (setting bit 7 to indicate a pending write).
+        self.__write_u8(_AS726X_SLAVE_WRITE_REG, (addr | 0x80))
+        while True:
+            # Read the slave I2C status to see if the write buffer is ready.
+            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
+            if (status & _AS726X_SLAVE_TX_VALID) == 0:
+                break # No inbound TX pending at slave. Okay to write data now.
+
+        # Send the data to complete the operation.
+        self.__write_u8(_AS726X_SLAVE_WRITE_REG, value)
+
+class AS7262(Adafruit_AS726x):
+    def __init__(self, i2c_bus):
+        super().__init__(i2c_bus)
+        self.integration_time = 140
+    
     @property
     def violet(self):
         """Calibrated violet (450nm) value"""
@@ -374,122 +451,70 @@ class Adafruit_AS726x(object):
         """Raw red (650nm) 16-bit value"""
         return self.read_channel(_AS7262_RED)
 
+class AS7263(Adafruit_AS726x):
+    def __init__(self, i2c_bus):
+        super().__init__(i2c_bus)
+        self.integration_time = 280
+    
     @property
     def raw_nir_r(self):
         """NIR Raw R"""
-        return self.read_channel(_AS7262_V_HIGH)
+        return self.read_channel(_AS7263_R)
 
     @property
     def raw_nir_s(self):
         """NIR Raw S"""
-        return self.read_channel(_AS7262_B_HIGH)
+        return self.read_channel(_AS7263_S)
     
     @property
     def raw_nir_t(self):
         """NIR Raw T"""
-        return self.read_channel(_AS7262_G_HIGH)
+        return self.read_channel(_AS7263_T)
     
     @property
     def raw_nir_u(self):
         """NIR Raw U"""
-        return self.read_channel(_AS7262_Y_HIGH)
+        return self.read_channel(_AS7263_U)
     
     @property
     def raw_nir_v(self):
         """NIR Raw V"""
-        return self.read_channel(_AS7262_O_HIGH)
+        return self.read_channel(_AS7263_V)
 
     @property
     def raw_nir_w(self):
         """NIR Raw W"""
-        return self.read_channel(_AS7262_R_HIGH)
+        return self.read_channel(_AS7263_W)
     
     @property
     def nir_r(self):
         """NIR Calibrated R"""
-        return self.read_channel(_AS7262_V_CAL)
+        return self.read_calibrated_value(_AS7263_R_CAL)
     
     @property
     def nir_s(self):
         """NIR Calibrated S"""
-        return self.read_channel(_AS7262_B_CAL)
+        return self.read_calibrated_value(_AS7263_S_CAL)
     
     @property
     def nir_t(self):
         """NIR Calibrated T"""
-        return self.read_channel(_AS7262_G_CAL)
+        return self.read_calibrated_value(_AS7263_T_CAL)
 
     @property
     def nir_u(self):
         """NIR Calibrated U"""
-        return self.read_channel(_AS7262_Y_CAL)
+        return self.read_calibrated_value(_AS7263_U_CAL)
     
     @property
     def nir_v(self):
         """NIR Calibrated V"""
-        return self.read_channel(_AS7262_O_CAL)
+        return self.read_calibrated_value(_AS7263_V_CAL)
 
     @property
     def nir_w(self):
         """NIR Calibrated W"""
-        return self.read_channel(_AS7262_R_CAL)
-
-
-    def _read_u8(self, command):
-        """read a single byte from a specified register"""
-        buf = self.buf2
-        buf[0] = command
-        with self.i2c_device as i2c:
-            i2c.write(buf, end=1)
-            i2c.readinto(buf, end=1)
-        return buf[0]
-
-    def __write_u8(self, command, abyte):
-        """Write a command and 1 byte of data to the I2C device"""
-        buf = self.buf2
-        buf[0] = command
-        buf[1] = abyte
-        with self.i2c_device as i2c:
-            i2c.write(buf)
-
-    def _virtual_read(self, addr):
-        """read a virtual register"""
-        while True:
-            # Read slave I2C status to see if the read buffer is ready.
-            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
-            if (status & _AS726X_SLAVE_TX_VALID) == 0:
-                # No inbound TX pending at slave. Okay to write now.
-                break
-        # Send the virtual register address (setting bit 7 to indicate a pending write).
-        self.__write_u8(_AS726X_SLAVE_WRITE_REG, addr)
-        while True:
-            # Read the slave I2C status to see if our read data is available.
-            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
-            if (status & _AS726X_SLAVE_RX_VALID) != 0:
-                # Read data is ready.
-                break
-        # Read the data to complete the operation.
-        data = self._read_u8(_AS726X_SLAVE_READ_REG)
-        return data
-
-    def _virtual_write(self, addr, value):
-        """write a virtual register"""
-        while True:
-            # Read slave I2C status to see if the write buffer is ready.
-            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
-            if (status & _AS726X_SLAVE_TX_VALID) == 0:
-                break # No inbound TX pending at slave. Okay to write now.
-        # Send the virtual register address (setting bit 7 to indicate a pending write).
-        self.__write_u8(_AS726X_SLAVE_WRITE_REG, (addr | 0x80))
-        while True:
-            # Read the slave I2C status to see if the write buffer is ready.
-            status = self._read_u8(_AS726X_SLAVE_STATUS_REG)
-            if (status & _AS726X_SLAVE_TX_VALID) == 0:
-                break # No inbound TX pending at slave. Okay to write data now.
-
-        # Send the data to complete the operation.
-        self.__write_u8(_AS726X_SLAVE_WRITE_REG, value)
-
+        return self.read_calibrated_value(_AS7263_W_CAL)
 
 #pylint: enable=too-many-instance-attributes
 #pylint: enable=too-many-public-methods
