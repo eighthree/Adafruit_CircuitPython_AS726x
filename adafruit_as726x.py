@@ -77,6 +77,33 @@ _AS726X_SLAVE_READ_REG = const(0x02)
 _AS726X_SLAVE_TX_VALID = const(0x02)
 _AS726X_SLAVE_RX_VALID = const(0x01)
 
+#AS7261 Hardware Registers
+_AS7261_X_HIGH =  const(0x08)
+_AS7261_X_LOW = const(0x09)
+_AS7261_Y_HIGH = const(0x0A)
+_AS7261_Y_LOW = const(0x0B)
+_AS7261_Z_HIGH = const(0x0C)
+_AS7261_Z_LOW = const(0x0D)
+_AS7261_NIR_HIGH = const(0x0E)
+_AS7261_NIR_LOW = const(0x0F)
+_AS7261_DARK_HIGH = const(0x10)
+_AS7261_DARK_LOW = const(0x11)
+_AS7261_CLEAR_HIGH = const(0x12)
+_AS7261_CLEAR_LOW = const(0x13)
+_AS7261_CAL_X = const(0x14)
+_AS7261_CAL_Y = const(0x18)
+_AS7261_CAL_Z = const(0x1C)
+_AS7261_CAL_X_1931 = const(0x20)
+_AS7261_CAL_Y_1931 = const(0x24)
+_AS7261_CAL_UPRI = const(0x28)
+_AS7261_CAL_VPRI = const(0x2C)
+_AS7261_CAL_U = const(0x30)
+_AS7261_CAL_V = const(0x34)
+_AS7261_CAL_DUV = const(0x38)
+_AS7261_CAL_LUX = const(0x3C)
+_AS7261_CAL_CCT = const(0x40)
+
+
 #AS7262 Hardware Registers
 _AS7262_VIOLET = const(0x08)
 _AS7262_BLUE = const(0x0A)
@@ -111,7 +138,6 @@ _AS726X_NUM_CHANNELS = const(6)
 #pylint: disable=too-many-public-methods
 class Adafruit_AS726x(object):
     """AS726x spectral sensor.
-
        :param ~busio.I2C i2c_bus: The I2C bus connected to the sensor
        """
 
@@ -157,7 +183,7 @@ class Adafruit_AS726x(object):
         version = self._virtual_read(_AS726X_HW_VERSION)
 
         #TODO: add support for other devices
-        if version != 0x40 and version != 0x3F:
+        if version != 0x40 and version != 0x3F and version != 0x01:
             raise ValueError("device could not be reached or this device is not supported!")
 
         self._hw_read = version
@@ -515,6 +541,138 @@ class AS7263(Adafruit_AS726x):
     def nir_w(self):
         """NIR Calibrated W"""
         return self.read_calibrated_value(_AS7263_W_CAL)
+
+class AS7261(Adafruit_AS726x):
+
+    def __init__(self, i2c_bus):
+        super().__init__(i2c_bus)
+        self.integration_time = 400
+        #self._indicator_led = False
+
+        state = self._virtual_read(_AS726X_LED_CONTROL)
+        state &= ~(0x1)
+        self._virtual_write(_AS726X_LED_CONTROL, state | False)
+    
+    @property
+    def raw_x_high(self):
+        """Channel X High Data Byte"""
+        return self.read_channel(_AS7261_X_HIGH)
+    
+    @property
+    def raw_x_low(self):
+        """Channel X Low Data Byte"""
+        return self.read_channel(_AS7261_X_LOW)
+    
+    @property
+    def raw_y_high(self):
+        """Channel Y High Data Byte"""
+        return self.read_channel(_AS7261_Y_HIGH)
+   
+    @property
+    def raw_y_low(self):
+        """Channel Y Low Data Byte"""
+        return self.read_channel(_AS7261_Y_LOW)
+    
+    @property
+    def raw_z_high(self):
+        """Channel Z High Data Byte"""
+        return self.read_channel(_AS7261_Z_HIGH)
+
+    @property
+    def raw_z_low(self):
+        """Channel Z Low Data Byte"""
+        return self.read_channel(_AS7261_Z_LOW)
+
+    @property
+    def nir_high(self):
+        """Channel NIR High"""
+        return self.read_channel(_AS7261_NIR_HIGH)
+
+    @property
+    def nir_low(self):
+        """Channel NIR Low"""
+        return self.read_channel(_AS7261_NIR_LOW)
+
+    @property
+    def dark_high(self):
+        """Channel DARK High"""
+        return self.read_channel(_AS7261_DARK_HIGH)
+
+    @property
+    def dark_low(self):
+        """Channel DARK Low"""
+        return self.read_channel(_AS7261_DARK_LOW)
+
+    @property
+    def clear_high(self):
+        """Channel Clear High"""
+        return self.read_channel(_AS7261_CLEAR_HIGH)
+
+    @property
+    def clear_low(self):
+        """Channel Clear Low"""
+        return self.read_channel(_AS7261_CLEAR_LOW)
+
+    @property
+    def cal_x(self):
+        """Channel Calibrated X"""
+        return self.read_channel(_AS7261_CAL_X)
+
+    @property
+    def cal_y(self):
+        """Channel Calibrated Y"""
+        return self.read_channel(_AS7261_CAL_Y)
+
+    @property
+    def cal_z(self):
+        """Channel Calibrated Z"""
+        return self.read_channel(_AS7261_CAL_Z)
+
+    @property
+    def cal_x_1931(self):
+        """Channel Calibrated X (CIE 1931)"""
+        return self.read_channel(_AS7261_CAL_X_1931)
+
+    @property
+    def cal_y_1931(self):
+        """Channel Calibrated Y (CIE 1931)"""
+        return self.read_channel(_AS7261_CAL_Y_1931)
+
+    @property
+    def cal_upri(self):
+        """Channel Calibrated u' (CIE 1976)"""
+        return self.read_channel(_AS7261_CAL_UPRI)
+
+    @property
+    def cal_vpri(self):
+        """Channel Calibrated v' (CIE 1976)"""
+        return self.read_channel(_AS7261_CAL_VPRI)
+
+    @property
+    def cal_u(self):
+        """Channel Calibrated u (CIE 1976)"""
+        return self.read_channel(_AS7261_CAL_U)
+
+    @property
+    def cal_v(self):
+        """Channel Calibrated v (CIE 1976)"""
+        return self.read_channel(_AS7261_CAL_V)
+
+    @property
+    def cal_duv(self):
+        """Channel Calibrated DUV (CIE 1976)"""
+        return self.read_channel(_AS7261_CAL_DUV)
+
+    @property
+    def cal_lux(self):
+        """Channel Calibrated LUX"""
+        return self.read_channel(_AS7261_CAL_LUX)
+
+    @property
+    def cal_cct(self):
+        """Channel Calibrated CCT"""
+        return self.read_channel(_AS7261_CAL_CCT)
+
 
 #pylint: enable=too-many-instance-attributes
 #pylint: enable=too-many-public-methods
